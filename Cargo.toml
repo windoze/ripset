@@ -1,0 +1,23 @@
+[package]
+name = "ripset"
+version = "0.1.0"
+edition = "2024"
+authors = ["Chen Xu <windoze@0d0a.com>"]
+description = "Pure Rust implementation of ipset/nftset operations via netlink"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/windoze/ripset"
+
+[features]
+cli = ["clap"]
+
+[dependencies]
+thiserror = "2"
+clap = { version = "4", features = ["derive"], optional = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+
+[[bin]]
+name = "ripset"
+path = "src/bin/ripset.rs"
+required-features = ["cli"]

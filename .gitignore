@@ -1,0 +1,6 @@
+/target
+.claude
+CLAUDE.md
+.env*
+.vscode/
+.DS_Store
