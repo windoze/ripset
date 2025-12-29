@@ -4,3 +4,4 @@ CLAUDE.md
 .env*
 .vscode/
 .DS_Store
+Cargo.lock
