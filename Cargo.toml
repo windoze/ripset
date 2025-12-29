@@ -8,7 +8,7 @@ description = "Pure Rust implementation of ipset/nftset operations via netlink"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/windoze/ripset"
 readme = "README.md"
-keywords = ["linux", "ipset", "nftset", "netlink", "nftables", "networking"]
+keywords = ["linux", "ipset", "netlink", "nftables", "networking"]
 categories = ["network-programming", "command-line-utilities"]
 
 [features]
