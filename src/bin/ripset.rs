@@ -5,7 +5,7 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use ripset::{
     IpSetCreateOptions, IpSetFamily, IpSetType, NftSetCreateOptions, NftSetType, ipset_add,
-    ipset_create, ipset_del, ipset_destroy, ipset_flush, ipset_list, nftset_add, nftset_create_set,
+    ipset_create, ipset_del, ipset_destroy, ipset_flush, ipset_rename, ipset_swap, ipset_list, nftset_add, nftset_create_set,
     nftset_create_table, nftset_del, nftset_delete_set, nftset_delete_table, nftset_list,
 };
 use std::net::IpAddr;
@@ -121,7 +121,7 @@ enum Commands {
         #[arg(short, long, default_value = "inet")]
         family: String,
     },
-    /// Manage sets (create, delete)
+    /// Manage sets (create, delete, rename, swap)
     Set {
         #[command(subcommand)]
         command: SetCommands,
@@ -159,6 +159,20 @@ enum SetCommands {
         /// Address family for nftables (inet, ip, ip6)
         #[arg(short, long, default_value = "inet")]
         family: String,
+    },
+    /// Rename a set
+    Rename {
+        /// Old name of the set to rename
+        set_name_from: String,
+        /// New name of the set to rename
+        set_name_to: String,
+    },
+    /// Swap sets
+    Swap {
+        /// Name of one set to swap
+        set_name_from: String,
+        /// Name of other set to swap
+        set_name_to: String,
     },
 }
 
@@ -311,6 +325,38 @@ fn handle_flush(
     }
 }
 
+fn handle_rename(
+    backend: Backend,
+    set_name_from: &str,
+    set_name_to: &str,
+) -> Result<(), String> {
+    let (_parsed_table, actual_set_name_from) = parse_table_set_name(set_name_from);
+    let (_parsed_table, actual_set_name_to) = parse_table_set_name(set_name_to);
+
+    match backend {
+        Backend::Ipset => ipset_rename(actual_set_name_from, actual_set_name_to).map_err(|e| e.to_string()),
+        Backend::Nftables => {
+            Err("Unsupported operation in this backend".into())
+        }
+    }
+}
+
+fn handle_swap(
+    backend: Backend,
+    set_name_from: &str,
+    set_name_to: &str,
+) -> Result<(), String> {
+    let (_parsed_table, actual_set_name_from) = parse_table_set_name(set_name_from);
+    let (_parsed_table, actual_set_name_to) = parse_table_set_name(set_name_to);
+
+    match backend {
+        Backend::Ipset => ipset_swap(actual_set_name_from, actual_set_name_to).map_err(|e| e.to_string()),
+        Backend::Nftables => {
+            Err("Unsupported operation in this backend".into())
+        }
+    }
+}
+
 fn handle_set_command(backend: Backend, command: SetCommands) -> Result<(), String> {
     match command {
         SetCommands::New {
@@ -365,6 +411,15 @@ fn handle_set_command(backend: Backend, command: SetCommands) -> Result<(), Stri
                 }
             }
         }
+        SetCommands::Rename {
+            set_name_from,
+            set_name_to,
+        } => handle_rename(backend, &set_name_from, &set_name_to),
+        SetCommands::Swap {
+            set_name_from,
+            set_name_to,
+        } => handle_swap(backend, &set_name_from, &set_name_to),
+
     }
 }
 

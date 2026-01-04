@@ -19,6 +19,8 @@ const IPSET_MAXNAMELEN: usize = 32;
 const IPSET_CMD_CREATE: u8 = 2;
 const IPSET_CMD_DESTROY: u8 = 3;
 const IPSET_CMD_FLUSH: u8 = 4;
+const IPSET_CMD_RENAME: u8 = 5;
+const IPSET_CMD_SWAP: u8 = 6;
 const IPSET_CMD_LIST: u8 = 7;
 const IPSET_CMD_ADD: u8 = 9;
 const IPSET_CMD_DEL: u8 = 10;
@@ -162,7 +164,11 @@ mod libc {
     pub use ::libc::*;
     // IPSET_ERR_PRIVATE = 4096, then PROTOCOL=4097, FIND_TYPE=4098, MAX_SETS=4099,
     // BUSY=4100, EXIST_SETNAME2=4101, TYPE_MISMATCH=4102, EXIST=4103
+    // INVALID_CIDR=4104, INVALID_NETMASK=4105, INVALID_FAMILY=4106, TIMEOUT=4107, REFERENCED=4108,
+    pub const IPSET_ERR_EXIST_SETNAME2: i32 = 4101;
+    pub const IPSET_ERR_TYPE_MISMATCH: i32 = 4102;
     pub const IPSET_ERR_EXIST: i32 = 4103;
+    pub const IPSET_ERR_REFERENCED: i32 = 4108;
 }
 
 /// ipset type for hash:ip sets
@@ -410,6 +416,128 @@ pub fn ipset_flush(setname: &str) -> Result<()> {
         }
         match -error {
             libc::ENOENT => return Err(IpSetError::SetNotFound(setname.to_string())),
+            _ => return Err(IpSetError::NetlinkError(-error)),
+        }
+    }
+
+    Err(IpSetError::ProtocolError)
+}
+
+/// Rename an ipset. Set identified by setname_to must not exist.
+///
+/// # Arguments
+///
+/// * `setname_from` - The current name of the ipset to rename
+/// * `setname_to` - The new name of the ipset to rename
+///
+/// # Example
+///
+/// ```no_run
+/// use ruhop_ipset::ipset_rename;
+///
+/// ipset_rename("myset", "mynewset").unwrap();
+/// ```
+pub fn ipset_rename(setname_from: &str, setname_to: &str) -> Result<()> {
+    if setname_from.is_empty() || setname_from.len() >= IPSET_MAXNAMELEN {
+        return Err(IpSetError::InvalidSetName(setname_from.to_string()));
+    }
+    if setname_to.is_empty() || setname_to.len() >= IPSET_MAXNAMELEN {
+        return Err(IpSetError::InvalidSetName(setname_to.to_string()));
+    }
+
+    let mut buf = MsgBuffer::new(BUFF_SZ);
+
+    buf.put_nlmsghdr(
+        ipset_msg_type(IPSET_CMD_RENAME),
+        NLM_F_REQUEST | NLM_F_ACK,
+        0,
+    );
+    buf.put_nfgenmsg(libc::AF_INET as u8, 0, 0);
+
+    buf.put_attr_u8(IPSET_ATTR_PROTOCOL, IPSET_PROTOCOL);
+    buf.put_attr_str(IPSET_ATTR_SETNAME, setname_from);
+    buf.put_attr_str(IPSET_ATTR_TYPENAME, setname_to);
+
+    buf.finalize_nlmsg();
+
+    let socket = NetlinkSocket::new()?;
+    let mut recv_buf = [0u8; BUFF_SZ];
+    let recv_len = socket.send_recv(buf.as_slice(), &mut recv_buf)?;
+
+    if recv_len < NlMsgHdr::SIZE {
+        return Err(IpSetError::ProtocolError);
+    }
+
+    if let Some(error) = parse_nlmsg_error(&recv_buf[..recv_len]) {
+        if error == 0 {
+            return Ok(());
+        }
+        match -error {
+            libc::ENOENT => return Err(IpSetError::SetNotFound(setname_from.to_string())),
+            libc::IPSET_ERR_REFERENCED => return Err(IpSetError::Referenced),
+            libc::IPSET_ERR_EXIST_SETNAME2 => return Err(IpSetError::ExistSetname2(setname_to.to_string())),
+            _ => return Err(IpSetError::NetlinkError(-error)),
+        }
+    }
+
+    Err(IpSetError::ProtocolError)
+}
+
+/// Swap the content of two ipsets, or in another words, exchange the name of two sets.
+/// The referred ipsets must exist and compatible type of ipsets can be swapped only.
+///
+/// # Arguments
+///
+/// * `setname_from` - The name of one ipset to swap
+/// * `setname_to` - The name of another ipset to swap
+///
+/// # Example
+///
+/// ```no_run
+/// use ruhop_ipset::ipset_swap;
+///
+/// ipset_swap("myoldset", "mynewset").unwrap();
+/// ```
+pub fn ipset_swap(setname_from: &str, setname_to: &str) -> Result<()> {
+    if setname_from.is_empty() || setname_from.len() >= IPSET_MAXNAMELEN {
+        return Err(IpSetError::InvalidSetName(setname_from.to_string()));
+    }
+    if setname_to.is_empty() || setname_to.len() >= IPSET_MAXNAMELEN {
+        return Err(IpSetError::InvalidSetName(setname_to.to_string()));
+    }
+
+    let mut buf = MsgBuffer::new(BUFF_SZ);
+
+    buf.put_nlmsghdr(
+        ipset_msg_type(IPSET_CMD_SWAP),
+        NLM_F_REQUEST | NLM_F_ACK,
+        0,
+    );
+    buf.put_nfgenmsg(libc::AF_INET as u8, 0, 0);
+
+    buf.put_attr_u8(IPSET_ATTR_PROTOCOL, IPSET_PROTOCOL);
+    buf.put_attr_str(IPSET_ATTR_SETNAME, setname_from);
+    buf.put_attr_str(IPSET_ATTR_TYPENAME, setname_to);
+
+    buf.finalize_nlmsg();
+
+    let socket = NetlinkSocket::new()?;
+    let mut recv_buf = [0u8; BUFF_SZ];
+    let recv_len = socket.send_recv(buf.as_slice(), &mut recv_buf)?;
+
+    if recv_len < NlMsgHdr::SIZE {
+        return Err(IpSetError::ProtocolError);
+    }
+
+    if let Some(error) = parse_nlmsg_error(&recv_buf[..recv_len]) {
+        if error == 0 {
+            return Ok(());
+        }
+        match -error {
+            libc::ENOENT => return Err(IpSetError::SetNotFound(setname_from.to_string())),
+            libc::IPSET_ERR_EXIST_SETNAME2 => return Err(IpSetError::ExistSetname2(setname_to.to_string())),
+            libc::IPSET_ERR_TYPE_MISMATCH => return Err(IpSetError::TypeMismatch),
+            libc::EBUSY => return Err(IpSetError::NetlinkError(-error)), // Set is in use
             _ => return Err(IpSetError::NetlinkError(-error)),
         }
     }
