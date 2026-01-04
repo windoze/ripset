@@ -16,7 +16,7 @@ pub mod nftset;
 #[cfg(target_os = "linux")]
 pub use ipset::{
     IpSetCreateOptions, IpSetFamily, IpSetType, ipset_add, ipset_create, ipset_del, ipset_destroy,
-    ipset_flush, ipset_list, ipset_test,
+    ipset_flush, ipset_rename, ipset_swap, ipset_list, ipset_test,
 };
 #[cfg(target_os = "linux")]
 pub use nftset::{
@@ -51,6 +51,15 @@ pub enum IpSetError {
 
     #[error("Set not found: {0}")]
     SetNotFound(String),
+
+    #[error("Set 2 exists: {0}")]
+    ExistSetname2(String),
+
+    #[error("Type mismatch")]
+    TypeMismatch,
+
+    #[error("Set is referenced")]
+    Referenced,
 
     #[error("Element not found")]
     ElementNotFound,

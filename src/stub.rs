@@ -71,6 +71,16 @@ pub fn ipset_flush(_setname: &str) -> Result<()> {
     Err(IpSetError::UnsupportedPlatform)
 }
 
+/// Rename an ipset (stub - returns UnsupportedPlatform error)
+pub fn ipset_rename(_setname_from: &str, _setname_to: &str) -> Result<()> {
+    Err(IpSetError::UnsupportedPlatform)
+}
+
+/// Swap ipsets (stub - returns UnsupportedPlatform error)
+pub fn ipset_swap(_setname_from: &str, _setname_to: &str) -> Result<()> {
+    Err(IpSetError::UnsupportedPlatform)
+}
+
 /// Add an IP to an ipset (stub - returns UnsupportedPlatform error)
 pub fn ipset_add<E: Into<IpEntry>>(_setname: &str, _entry: E) -> Result<()> {
     Err(IpSetError::UnsupportedPlatform)
